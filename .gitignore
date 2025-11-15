@@ -1,1 +1,13 @@
+# Секреты и конфиги
+.env
+.env.local
+*.env
 
+# Данные бота
+schedule.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
