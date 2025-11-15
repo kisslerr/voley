@@ -215,15 +215,22 @@ async def auto_register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ====================================
 # MAIN
 # ====================================
+from dotenv import load_dotenv
+import os
+
 def main():
-    from dotenv import load_dotenv
-    load_dotenv()
     global schedule
     schedule = load_schedule()
 
+    # Загружаем .env
+    load_dotenv()
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    if not BOT_TOKEN:
+        raise RuntimeError("Ошибка: BOT_TOKEN не найден! Проверь .env файл.")
+
     app = (
         Application.builder()
-        .token(BOT_TOKEN)  # <-- Используем переменную из env
+        .token(BOT_TOKEN)
         .concurrent_updates(True)
         .build()
     )
@@ -234,7 +241,3 @@ def main():
 
     print("Бот запущен.")
     app.run_polling()
-
-if __name__ == "__main__":
-    main()
-
