@@ -166,7 +166,7 @@ async def send_reminder(context: ContextTypes.DEFAULT_TYPE):
 # АДМИН-ПАНЕЛЬ
 # ====================================
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != 123456789:  # ← ЗАМЕНИ НА СВОЙ ID!
+    if update.effective_user.id != 737408288:  # ← ЗАМЕНИ НА СВОЙ ID!
         return
     keyboard = [
         [InlineKeyboardButton("ОЧИСТИТЬ ВТ", callback_data="clear_Вторник")],
@@ -176,7 +176,7 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def clear_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != 123456789: return
+    if update.effective_user.id != 737408288: return
     query = update.callback_query
     day = query.data.split("_")[1]
     schedule[day].clear()
@@ -226,3 +226,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
