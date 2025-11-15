@@ -6,9 +6,7 @@ from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
-    MessageHandler,
-    ContextTypes,
-    filters
+    ContextTypes
 )
 
 # ==== НАСТРОЙКИ ====
@@ -23,12 +21,8 @@ TRAINING_TIME = {
     "Четверг": 20   # 20:00
 }
 
-# Загрузка .env
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except:
-    pass
+# Админ ID (автоопределение)
+ADMIN_ID = None
 
 # Стартовая структура
 schedule = {"Вторник": [], "Четверг": []}
@@ -70,6 +64,14 @@ def format_time(day):
 # КНОПКИ — ВСЕГДА ПРИ ДОБАВЛЕНИИ
 # ====================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global ADMIN_ID
+    user = update.effective_user
+
+    # Первый пользователь — админ
+    if ADMIN_ID is None:
+        ADMIN_ID = user.id
+        print(f"Админ установлен: {ADMIN_ID}")
+
     if update.effective_chat.type in ["group", "supergroup"]:
         context.application.bot_data["chat_id"] = update.effective_chat.id
 
@@ -138,6 +140,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += "\n"
         await query.edit_message_text(msg.strip(), parse_mode="Markdown")
 
+    elif data == "show_id":
+        await query.edit_message_text(f"Твой ID: `{query.from_user.id}`", parse_mode="Markdown")
+
 # ====================================
 # УВЕДОМЛЕНИЕ ЗА ЧАС
 # ====================================
@@ -163,20 +168,32 @@ async def send_reminder(context: ContextTypes.DEFAULT_TYPE):
     )
 
 # ====================================
-# АДМИН-ПАНЕЛЬ
+# АДМИН-ПАНЕЛЬ (РАБОТАЕТ!)
 # ====================================
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != 737408288:  # ← ЗАМЕНИ НА СВОЙ ID!
+    global ADMIN_ID
+    user_id = update.effective_user.id
+
+    # Первый пользователь — админ
+    if ADMIN_ID is None:
+        ADMIN_ID = user_id
+
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("Доступ запрещён.")
         return
+
     keyboard = [
         [InlineKeyboardButton("ОЧИСТИТЬ ВТ", callback_data="clear_Вторник")],
         [InlineKeyboardButton("ОЧИСТИТЬ ЧТ", callback_data="clear_Четверг")],
+        [InlineKeyboardButton("МОЙ ID", callback_data="show_id")],
     ]
-    msg = f"АДМИН\nВТ: {len(schedule['Вторник'])}/12\nЧТ: {len(schedule['Четверг'])}/12"
+    msg = f"АДМИН-ПАНЕЛЬ\nВТ: {len(schedule['Вторник'])}/12\nЧТ: {len(schedule['Четверг'])}/12"
     await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def clear_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != 737408288: return
+    global ADMIN_ID
+    if update.effective_user.id != ADMIN_ID:
+        return
     query = update.callback_query
     day = query.data.split("_")[1]
     schedule[day].clear()
@@ -198,16 +215,10 @@ def main():
     # Хендлеры
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin))
-    app.add_handler(CallbackQueryHandler(button, pattern="^(group_join|group_cancel|view)$"))
+    app.add_handler(CallbackQueryHandler(button, pattern="^(group_join|group_cancel|view|show_id)$"))
     app.add_handler(CallbackQueryHandler(clear_day, pattern="^clear_"))
 
-    # Сохраняем ID группы при /start
-    async def save_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if update.effective_chat.type in ["group", "supergroup"]:
-            context.application.bot_data["chat_id"] = update.effective_chat.id
-    app.add_handler(CommandHandler("start", save_chat, filters.ChatType.GROUPS))
-
-    # Уведомления за час (один раз на тренировку)
+    # Уведомления за час
     now = now_utc5()
     for day_name, hour in TRAINING_TIME.items():
         target = now.replace(hour=hour - 1, minute=0, second=0, microsecond=0)
@@ -221,9 +232,8 @@ def main():
             data=app.bot_data.get("chat_id")
         )
 
-    print("БОТ ЗАПУЩЕН (UTC+5) | Кнопка — всегда при добавлении")
+    print("БОТ ЗАПУЩЕН | Админка работает | Кнопка — всегда")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-
