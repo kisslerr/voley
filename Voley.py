@@ -216,6 +216,8 @@ async def auto_register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MAIN
 # ====================================
 def main():
+    from dotenv import load_dotenv
+    load_dotenv()
     global schedule
     schedule = load_schedule()
 
@@ -235,3 +237,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
