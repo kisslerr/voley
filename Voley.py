@@ -1,6 +1,5 @@
 import json
 import datetime
-import re
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -24,7 +23,7 @@ TRAINING_TIME = {
     "Четверг": 20   # 20:00
 }
 
-# Загрузка .env (если есть)
+# Загрузка .env
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -68,45 +67,26 @@ def format_time(day):
     return f"{TRAINING_TIME[day]:02d}:00"
 
 # ====================================
-# ЕЖЕДНЕВНЫЕ КНОПКИ (9:00)
-# ====================================
-async def daily_buttons(context: ContextTypes.DEFAULT_TYPE):
-    chat_id = context.application.bot_data.get("chat_id")
-    if not chat_id:
-        return
-    nearest = get_nearest_day()
-    time_str = format_time(nearest)
-    keyboard = [
-        [InlineKeyboardButton("Я ИДУ", callback_data="group_join")],
-        [InlineKeyboardButton("ОТМЕНИТЬ", callback_data="group_cancel")],
-        [InlineKeyboardButton("РАСПИСАНИЕ", callback_data="view")],
-    ]
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=f"БЛИЖАЙШАЯ ТРЕНИРОВКА\n{nearest.upper()} {time_str}",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-# ====================================
-# /start
+# КНОПКИ — ВСЕГДА ПРИ ДОБАВЛЕНИИ
 # ====================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type in ["group", "supergroup"]:
         context.application.bot_data["chat_id"] = update.effective_chat.id
+
     nearest = get_nearest_day()
     time_str = format_time(nearest)
     keyboard = [
-        [InlineKeyboardButton("Я ИДУ", callback_data="group_join")],
+        [InlineKeyboardButton("ЗАПИСАТЬСЯ", callback_data="group_join")],
         [InlineKeyboardButton("ОТМЕНИТЬ", callback_data="group_cancel")],
         [InlineKeyboardButton("РАСПИСАНИЕ", callback_data="view")],
     ]
     await update.message.reply_text(
-        f"Ближайшая тренировка:\n{nearest.upper()} {time_str} (UTC+5)",
+        f"БЛИЖАЙШАЯ ТРЕНИРОВКА\n{nearest.upper()} {time_str}",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ====================================
-# КНОПКИ
+# КНОПКИ: ЗАПИСЬ / ОТМЕНА / РАСПИСАНИЕ
 # ====================================
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -114,8 +94,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     user = query.from_user
     uid = f"{user.first_name}".strip()
-    if user.username:
-        uid += f" (@{user.username})"
+    if user.username: uid += f" (@{user.username})"
     uid += f" ({user.id})"
     day = get_nearest_day()
 
@@ -143,7 +122,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         schedule[day].remove(uid)
         save_schedule()
-        keyboard = [[InlineKeyboardButton("Я ИДУ", callback_data="group_join")]]
+        keyboard = [[InlineKeyboardButton("ЗАПИСАТЬСЯ", callback_data="group_join")]]
         await query.edit_message_text(
             f"Запись отменена.\nСейчас: {len(schedule[day])}/{MAX_PARTICIPANTS}",
             reply_markup=InlineKeyboardMarkup(keyboard)
@@ -166,6 +145,7 @@ async def send_reminder(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     day = job.name
     chat_id = job.data
+    if not chat_id: return
     time_str = format_time(day)
     count = len(schedule[day])
     msg = f"ТРЕНИРОВКА ЧЕРЕЗ 1 ЧАС!\n{day.upper()} {time_str}\n\nИДУТ: {count}/{MAX_PARTICIPANTS}\n"
@@ -173,7 +153,7 @@ async def send_reminder(context: ContextTypes.DEFAULT_TYPE):
         name = user.split(" (")[0]
         msg += f"{i}. {name}\n"
     keyboard = [
-        [InlineKeyboardButton("Я ИДУ", callback_data="group_join")],
+        [InlineKeyboardButton("ЗАПИСАТЬСЯ", callback_data="group_join")],
         [InlineKeyboardButton("ОТМЕНИТЬ", callback_data="group_cancel")],
     ]
     await context.bot.send_message(
@@ -211,7 +191,7 @@ def main():
     schedule = load_schedule()
 
     if not BOT_TOKEN:
-        raise RuntimeError("BOT_TOKEN не найден! Укажи в переменных bothost.ru")
+        raise RuntimeError("BOT_TOKEN не найден! Укажи в bothost.ru → Переменные")
 
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -221,24 +201,14 @@ def main():
     app.add_handler(CallbackQueryHandler(button, pattern="^(group_join|group_cancel|view)$"))
     app.add_handler(CallbackQueryHandler(clear_day, pattern="^clear_"))
 
-    # Сохраняем ID группы
+    # Сохраняем ID группы при /start
     async def save_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_chat.type in ["group", "supergroup"]:
             context.application.bot_data["chat_id"] = update.effective_chat.id
     app.add_handler(CommandHandler("start", save_chat, filters.ChatType.GROUPS))
 
-    # Ежедневно в 9:00 — кнопки
-    now = now_utc5()
-    target = now.replace(hour=9, minute=0, second=0, microsecond=0)
-    if now > target:
-        target += datetime.timedelta(days=1)
-    app.job_queue.run_daily(
-        daily_buttons,
-        time=target.time(),
-        days=(0,1,2,3,4,5,6)
-    )
-
     # Уведомления за час (один раз на тренировку)
+    now = now_utc5()
     for day_name, hour in TRAINING_TIME.items():
         target = now.replace(hour=hour - 1, minute=0, second=0, microsecond=0)
         if now > target:
@@ -251,7 +221,7 @@ def main():
             data=app.bot_data.get("chat_id")
         )
 
-    print("БОТ ЗАПУЩЕН (UTC+5)")
+    print("БОТ ЗАПУЩЕН (UTC+5) | Кнопка — всегда при добавлении")
     app.run_polling()
 
 if __name__ == "__main__":
